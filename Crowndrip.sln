@@ -1,0 +1,51 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+
+# 1. 宣告 C# 前端 UI 專案 (CrownDrip_UI)
+# 其內含的專案 GUID 必須與 .csproj 內部完全對齊
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrownDrip_UI", "src\Crowndrip_UI\CrownDrip_UI.csproj", "{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}"
+EndProject
+
+# 2. 宣告 C++ 注入跳板專案 (CrownDrip_Loader)
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CrownDrip_Loader", "src\CrownDrip_Loader\CrownDrip_Loader.vcxproj", "{B2C3D4E5-F6A7-8B9C-0D1E-2F3A4B5C6D7E}"
+EndProject
+
+# 3. 宣告 C++ 核心對抗內核專案 (CrownDrip_Core)
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CrownDrip_Core", "src\CrownDrip_Core\CrownDrip_Core.vcxproj", "{C3D4E5F6-A7B8-9C0D-1E2F-3A4B5C6D7E8F}"
+EndProject
+
+Global
+	# 定義整個方案支援的編譯平台配置
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	
+	# 將方案的配置映射到各個獨立專案中，確保編譯時全部統一為 Release x64
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}.Debug|x64.Build.0 = Debug|x64
+		{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}.Release|x64.ActiveCfg = Release|x64
+		{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}.Release|x64.Build.0 = Release|x64
+		
+		{B2C3D4E5-F6A7-8B9C-0D1E-2F3A4B5C6D7E}.Debug|x64.ActiveCfg = Debug|x64
+		{B2C3D4E5-F6A7-8B9C-0D1E-2F3A4B5C6D7E}.Debug|x64.Build.0 = Debug|x64
+		{B2C3D4E5-F6A7-8B9C-0D1E-2F3A4B5C6D7E}.Release|x64.ActiveCfg = Release|x64
+		{B2C3D4E5-F6A7-8B9C-0D1E-2F3A4B5C6D7E}.Release|x64.Build.0 = Release|x64
+		
+		{C3D4E5F6-A7B8-9C0D-1E2F-3A4B5C6D7E8F}.Debug|x64.ActiveCfg = Debug|x64
+		{C3D4E5F6-A7B8-9C0D-1E2F-3A4B5C6D7E8F}.Debug|x64.Build.0 = Debug|x64
+		{C3D4E5F6-A7B8-9C0D-1E2F-3A4B5C6D7E8F}.Release|x64.ActiveCfg = Release|x64
+		{C3D4E5F6-A7B8-9C0D-1E2F-3A4B5C6D7E8F}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D4E5F6A7-B89C-0D1E-2F3A-4B5C6D7E8F9A}
+	EndGlobalSection
+EndGlobal
