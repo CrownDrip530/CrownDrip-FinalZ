@@ -1,11 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <UseWPF>true</UseWPF>
     <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <ProjectGuid>{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}</ProjectGuid>
   </PropertyGroup>
+
   <ItemGroup>
     <Compile Update="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
@@ -14,4 +18,5 @@
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
+
 </Project>
