@@ -1,39 +1,40 @@
 name: Build CrownDrip Executor
 
-# 當代碼推送到 main 分支時，觸發自動化編譯
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+      - master
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+      - master
 
 jobs:
   build:
-    runs-on: windows-2022 # 必須在 Windows 環境編譯 C++/CLI 與組合語言
+    runs-on: windows-2022
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-    - name: Setup NuGet
-      uses: NuGet/setup-nuget@v1
+      - name: Restore solution
+        shell: cmd
+        run: |
+          msbuild Crowndrip.sln /t:Restore /p:Configuration=Release /p:Platform=x64 /p:RuntimeIdentifier=win-x64
 
-    - name: Restore NuGet Packages
-      run: nuget restore Crowndrip.sln
+      - name: Build solution
+        shell: cmd
+        run: |
+          msbuild Crowndrip.sln /p:Configuration=Release /p:Platform=x64 /p:RuntimeIdentifier=win-x64 /p:GenerateDebugInformation=false
 
-    # 編譯解決方案 (設定為 Release 模式與 x64 架構)
-    - name: Build Solution
-      run: |
-        msbuild Crowndrip.sln /p:Configuration=Release /p:Platform=x64 /p:GenerateDebugInformation=false
-
-    # 將編譯產出的可執行檔打包上傳，方便團隊測試行為
-    - name: Upload Build Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: CrownDrip-Production-Build
-        path: |
-          src/Crowndrip_UI/bin/x64/Release/CrownDrip_UI.exe
-          src/CrownDrip_Loader/bin/x64/Release/CrownDrip_Loader.exe
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CrownDrip-Production-Build
+          path: |
+            src/Crowndrip_UI/bin/x64/Release/net48/**
+            x64/Release/**
