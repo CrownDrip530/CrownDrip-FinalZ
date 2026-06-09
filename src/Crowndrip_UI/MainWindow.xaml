@@ -1,0 +1,47 @@
+<Window x:Class="Crowndrip_UI.MainWindow"
+        xmlns="http://microsoft.com"
+        xmlns:x="http://microsoft.com"
+        Title="CrownDrip Executor v2 - Professional Edition" Height="500" Width="800" Background="#1E1E1E">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="30"/>  <!-- 工具列 -->
+            <RowDefinition Height="*"/>   <!-- 文本輸入框 -->
+            <RowDefinition Height="45"/>  <!-- 控制與狀態欄 -->
+        </Grid.RowDefinitions>
+
+        <!-- 頂部工具列 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Background="#252526">
+            <Menu Background="Transparent" Foreground="#FFFFFF" Margin="5,0,0,0">
+                <MenuItem Header="File" Foreground="#FFFFFF">
+                    <MenuItem Header="Open Script" Foreground="#000000"/>
+                    <MenuItem Header="Save Script" Foreground="#000000"/>
+                </MenuItem>
+            </Menu>
+        </StackPanel>
+
+        <!-- 腳本編輯輸入框 -->
+        <TextBox x:Name="ScriptTextBox" Grid.Row="1" Margin="10" 
+                 Background="#1E1E1E" Foreground="#D4D4D4" BorderBrush="#3F3F3F"
+                 AcceptsReturn="True" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                 FontFamily="Consolas" FontSize="14" AcceptsTab="True"
+                 Text="-- CrownDrip Custom Luau Injection Engine&#x0a;print('Successfully initialized!')"/>
+
+        <!-- 底部狀態列與按鈕 -->
+        <Grid Grid.Row="2" Background="#007ACC">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 注入/執行狀態監聽標籤 -->
+            <Label x:Name="StatusLabel" Grid.Column="0" Content="Status: Ready" 
+                   Foreground="#FFFFFF" VerticalAlignment="Center" Margin="15,0,0,0" FontWeight="Bold"/>
+
+            <!-- 執行核心按鈕 -->
+            <Button x:Name="ExecuteButton" Grid.Column="1" Content="Execute" 
+                    Width="120" Height="30" Margin="0,0,15,0"
+                    Background="#252526" Foreground="#FFFFFF" BorderThickness="0"
+                    FontWeight="Bold" Click="ExecuteButton_Click"/>
+        </Grid>
+    </Grid>
+</Window>
