@@ -15,7 +15,7 @@ bool InitializeBridge() {
     // 1. 盲掃 Luau 編譯與執行函式的當週特徵碼
     uintptr_t load_addr = ScanMemoryPattern("\x48\x8B\xC4\x48\x89\x58\x08\x48\x89\x68\x10\x48\x89\x70\x18\x57\x41\x56\x41\x57\x48\x83\xEC\x40", "xxxxxxxxxxxxxxxxxxxxxxxx");
     uintptr_t pcall_addr = ScanMemoryPattern("\x48\x89\x5C\x24\x08\x48\x89\x74\x24\x10\x57\x48\x83\xEC\x30\x48\x8B\xF1\x8B\xFA", "xxxxxxxxxxxxxxxxxxxx");
-    uintptr_t state_addr = ScanMemoryPattern("\x48\x8B\x05\x00\x00\x00\x00\x48\x8B\x88\x00\x00\x00\x00\x48\x85\xC9", "xxx????xxx????xxx");
+    uintptr_t state_addr = ScanMemoryPattern("\x48\x8B\x05\x00\x00\x00\x00\x48\x8B\x88\x00\x00\x00\x00\x48\x85xC9", "xxx????xxx????xxx");
 
     if (!load_addr || !pcall_addr || !state_addr) return false;
 
@@ -36,7 +36,6 @@ void ExecuteInRobloxVM(const std::string& decryptedScript) {
     if (!global_L && !InitializeBridge()) return;
 
     // 呼叫動態獲取的 Luau 編譯器，將純文字的 Lua 腳本編譯為字節碼
-    // 這裡利用了動態特徵碼，因此能完全無視 Hyperion 每週打亂位址的 Polymorphism 防護
     if (rbx_luau_load(global_L, "=CrownDripChunk", decryptedScript.c_str(), decryptedScript.size(), 0) == 0) {
         // 編譯成功後，呼叫受保護的 pcall 執行該腳本區塊
         rbx_luau_pcall(global_L, 0, 0, 0);
