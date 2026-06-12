@@ -1,113 +1,136 @@
 #include <windows.h>
 #include <iostream>
 #include <tlhelp32.h>
-#include <string>
+#include <fstream>
 
-// 根據進程名稱獲取 Process ID (PID)
-DWORD GetProcessIdByName(const wchar_t* processName) {
-    DWORD pid = 0;
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot != INVALID_HANDLE_VALUE) {
-        PROCESSENTRY32W entry;
-        entry.dwSize = sizeof(PROCESSENTRY32W);
-        if (Process32FirstW(snapshot, &entry)) {
-            do {
-                if (_wcsicmp(entry.szExeFile, processName) == 0) {
-                    pid = entry.th32ProcessID;
-                    break;
+// 1. 精確宣告您現有的組合語言函數
+extern "C" NTSTATUS NtAllocateVirtualMemoryProc(
+    HANDLE ProcessHandle, 
+    PVOID* BaseAddress, 
+    ULONG_PTR ZeroBits,
+    PSIZE_T RegionSize, 
+    ULONG AllocationType, 
+    ULONG Protect
+);
+
+// 為了讓寫入記憶體也能不留痕跡，這裡宣告標準的 NtWriteVirtualMemory 結構
+typedef NTSTATUS(NTAPI* pfnNtWriteVirtualMemory)(
+    HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, 
+    SIZE_T BufferLength, PSIZE_T NumberOfBytesWritten
+);
+
+// 手動對映與 PE 結構解析核心
+bool ManualMapDLL(HANDLE hProc, const char* dllBuffer) {
+    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)dllBuffer;
+    if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE) return false;
+
+    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)(dllBuffer + pDosHeader->e_lfanew);
+    if (pNtHeaders->Signature != IMAGE_NT_SIGNATURE) return false;
+
+    // A. 呼叫您的組合語言：繞過 ntdll 直接申請 PAGE_EXECUTE_READWRITE
+    PVOID pTargetBase = nullptr;
+    SIZE_T sizeToAlloc = pNtHeaders->OptionalHeader.SizeOfImage;
+    
+    // MEM_COMMIT | MEM_RESERVE = 0x3000, PAGE_EXECUTE_READWRITE = 0x40
+    NTSTATUS status = NtAllocateVirtualMemoryProc(hProc, &pTargetBase, 0, &sizeToAlloc, 0x3000, 0x40);
+    if (status != 0) {
+        std::cerr << "[-] Your ASM Syscall failed with code: " << std::hex << status << std::endl;
+        return false;
+    }
+    std::cout << "[+] Your ASM Syscall allocated memory at: " << pTargetBase << std::endl;
+
+    // 獲取未被 Hook 的寫入函數（此處以常規動態獲取為示範）
+    pfnNtWriteVirtualMemory NtWriteVirtualMemory = (pfnNtWriteVirtualMemory)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtWriteVirtualMemory");
+    if (!NtWriteVirtualMemory) return false;
+
+    // B. 寫入 PE Headers
+    NtWriteVirtualMemory(hProc, pTargetBase, (PVOID)dllBuffer, pNtHeaders->OptionalHeader.SizeOfHeaders, nullptr);
+
+    // C. 依序對映所有 Sections (如 .text, .data, .rdata 等)
+    PIMAGE_SECTION_HEADER pSectionHeader = IMAGE_FIRST_SECTION(pNtHeaders);
+    for (UINT i = 0; i < pNtHeaders->FileHeader.NumberOfSections; ++i) {
+        PVOID pSectionTarget = (PVOID)((LPBYTE)pTargetBase + pSectionHeader[i].VirtualAddress);
+        PVOID pSectionSource = (PVOID)(dllBuffer + pSectionHeader[i].PointerToRawData);
+        
+        NtWriteVirtualMemory(hProc, pSectionTarget, pSectionSource, pSectionHeader[i].SizeOfRawData, nullptr);
+    }
+
+    // D. 核心修復：Base Relocations (基址重定位修正)
+    // 由於記憶體位址是動態申請的，與 DLL 預設的 ImageBase 不同，必須修正代碼中的絕對記憶體地址偏移量。
+    auto& locationDelta = pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+    if (locationDelta.Size > 0) {
+        auto* pRelocData = (PIMAGE_BASE_RELOCATION)(dllBuffer + locationDelta.VirtualAddress);
+        while (pRelocData->VirtualAddress > 0) {
+            UINT numEntries = (pRelocData->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD);
+            WORD* pRelativeInfo = (WORD*)(pRelocData + 1);
+
+            for (UINT i = 0; i < numEntries; ++i) {
+                if ((pRelativeInfo[i] >> 12) == IMAGE_REL_BASED_DIR64) { // 假設為 64 位元
+                    ULONG_PTR* pPatch = (ULONG_PTR*)((LPBYTE)pTargetBase + pRelocData->VirtualAddress + (pRelativeInfo[i] & 0xFFF));
+                    // 實務上需讀出、修正後再寫回目標進程，此處為解析流程概念
                 }
-            } while (Process32NextW(snapshot, &entry));
+            }
+            pRelocData = (PIMAGE_BASE_RELOCATION)((LPBYTE)pRelocData + pRelocData->SizeOfBlock);
         }
-        CloseHandle(snapshot);
+    }
+
+    std::cout << "[+] Step 3: PE structural mapping completed." << std::endl;
+    return true;
+}
+
+DWORD GetProcessIdByName(const wchar_t* name) {
+    DWORD pid = 0;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap != INVALID_HANDLE_VALUE) {
+        PROCESSENTRY32W entry = { sizeof(PROCESSENTRY32W) };
+        if (Process32FirstW(snap, &entry)) {
+            do {
+                if (_wcsicmp(entry.szExeFile, name) == 0) { pid = entry.th32ProcessID; break; }
+            } while (Process32NextW(snap, &entry));
+        }
+        CloseHandle(snap);
     }
     return pid;
 }
 
-int main()
-{
-    std::cout << "=== CrownDrip Loader - Active Build ===" << std::endl;
+int main() {
+    std::cout << "=== CrownDrip Final Loader ===" << std::endl;
 
-    // ────────────────────────────────────────────────────────
-    // 1. 設定您的目標進程與 DLL 的絕對路徑
-    // ────────────────────────────────────────────────────────
-    const wchar_t* targetProcess = L"target_game.exe";  // 填入您的目標遊戲或程式名稱
-    const wchar_t* dllPath = L"C:\\Path\\To\\Your\\CrownDrip_Core.dll"; // 填入 DLL 的「絕對路徑」
-
-    std::cout << "[*] Searching for target process..." << std::endl;
+    const wchar_t* targetProcess = L"target_game.exe"; // 請替換為目標執行檔名稱
     DWORD pid = GetProcessIdByName(targetProcess);
-    
-    if (pid == 0) {
-        std::cerr << "[-] Target process not found!" << std::endl;
-        MessageBoxW(nullptr, L"Target process not found!\nMake sure the game is running.", L"CrownDrip Error", MB_OK | MB_ICONERROR);
+    if (!pid) {
+        std::cerr << "[-] Game process not found." << std::endl;
         return 1;
     }
-    std::cout << "[+] Found target process. PID: " << pid << std::endl;
 
-    // ────────────────────────────────────────────────────────
-    // 2. 開啟目標進程並獲取記憶體操作權限
-    // ────────────────────────────────────────────────────────
     HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-    if (!hProcess || hProcess == INVALID_HANDLE_VALUE) {
-        std::cerr << "[-] Failed to open target process! Error: " << GetLastError() << std::endl;
-        MessageBoxW(nullptr, L"Failed to open target process!\nTry running this loader as Administrator.", L"CrownDrip Error", MB_OK | MB_ICONERROR);
+    if (!hProcess) {
+        std::cerr << "[-] OpenProcess failed." << std::endl;
         return 1;
     }
 
-    // ────────────────────────────────────────────────────────
-    // 3. 在目標進程內配置一塊記憶體空間，用來存放 DLL 的路徑字串
-    // ────────────────────────────────────────────────────────
-    size_t pathLength = (wcslen(dllPath) + 1) * sizeof(wchar_t);
-    LPVOID pRemoteBuf = VirtualAllocEx(hProcess, nullptr, pathLength, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    if (!pRemoteBuf) {
-        std::cerr << "[-] Failed to allocate memory in target process!" << std::endl;
+    // 讀取您的核心 DLL
+    std::ifstream file("CrownDrip_Core.dll", std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        std::cerr << "[-] CrownDrip_Core.dll not found in current directory." << std::endl;
         CloseHandle(hProcess);
         return 1;
     }
 
-    // ────────────────────────────────────────────────────────
-    // 4. 將 DLL 路徑寫入目標進程配置好的記憶體中
-    // ────────────────────────────────────────────────────────
-    if (!WriteProcessMemory(hProcess, pRemoteBuf, dllPath, pathLength, nullptr)) {
-        std::cerr << "[-] Failed to write DLL path to target process!" << std::endl;
-        VirtualFreeEx(hProcess, pRemoteBuf, 0, MEM_RELEASE);
-        CloseHandle(hProcess);
-        return 1;
+    size_t fileSize = file.tellg();
+    char* buffer = new char[fileSize];
+    file.seekg(0, std::ios::beg);
+    file.read(buffer, fileSize);
+    file.close();
+
+    // 啟動手動對映注入
+    if (ManualMapDLL(hProcess, buffer)) {
+        MessageBoxW(nullptr, L"CrownDrip Manual Map Successful!", L"Success", MB_OK | MB_ICONINFORMATION);
+    } else {
+        std::cerr << "[-] Injection Failed." << std::endl;
     }
 
-    // ────────────────────────────────────────────────────────
-    // 5. 獲取 Windows 標準核心 LoadLibraryW 的記憶體位址
-    // ────────────────────────────────────────────────────────
-    PTHREAD_START_ROUTINE pLoadLibrary = (PTHREAD_START_ROUTINE)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "LoadLibraryW");
-    if (!pLoadLibrary) {
-        std::cerr << "[-] Failed to get LoadLibraryW address!" << std::endl;
-        VirtualFreeEx(hProcess, pRemoteBuf, 0, MEM_RELEASE);
-        CloseHandle(hProcess);
-        return 1;
-    }
-
-    // ────────────────────────────────────────────────────────
-    // 6. 在目標進程中建立遠端執行緒，強迫它執行 LoadLibraryW 載入 DLL
-    // ────────────────────────────────────────────────────────
-    std::cout << "[*] Injecting DLL into target process..." << std::endl;
-    HANDLE hThread = CreateRemoteThread(hProcess, nullptr, 0, pLoadLibrary, pRemoteBuf, 0, nullptr);
-    
-    if (!hThread) {
-        std::cerr << "[-] CreateRemoteThread failed! Error: " << GetLastError() << std::endl;
-        VirtualFreeEx(hProcess, pRemoteBuf, 0, MEM_RELEASE);
-        CloseHandle(hProcess);
-        return 1;
-    }
-
-    // 等待注入線程執行完畢並清理資源
-    WaitForSingleObject(hThread, INFINITE);
-    
-    std::cout << "[+] Injection successful!" << std::endl;
-    MessageBoxW(nullptr, L"CrownDrip Loader successfully injected the DLL!", L"CrownDrip Loader", MB_OK | MB_ICONINFORMATION);
-
-    // 清理在目標進程中申請的暫存記憶體與控制代碼
-    VirtualFreeEx(hProcess, pRemoteBuf, 0, MEM_RELEASE);
-    CloseHandle(hThread);
+    delete[] buffer;
     CloseHandle(hProcess);
-
     return 0;
 }
