@@ -12,10 +12,15 @@ rbx_LuaState global_L = nullptr;
 
 // 初始化橋接器，利用特徵碼動態對齊記憶體位址
 bool InitializeBridge() {
-    // 1. 盲掃 Luau 編譯與執行函式的當週特徵碼
+    // 如果已經初始化過了，就直接回傳 true，避免重複掃描記憶體降低效能
+    if (rbx_luau_load && rbx_luau_pcall && global_L) {
+        return true;
+    }
+
+    // 1. 盲掃 Luau 編譯與執行函式的特徵碼
     uintptr_t load_addr = ScanMemoryPattern("\x48\x8B\xC4\x48\x89\x58\x08\x48\x89\x68\x10\x48\x89\x70\x18\x57\x41\x56\x41\x57\x48\x83\xEC\x40", "xxxxxxxxxxxxxxxxxxxxxxxx");
     uintptr_t pcall_addr = ScanMemoryPattern("\x48\x89\x5C\x24\x08\x48\x89\x74\x24\x10\x57\x48\x83\xEC\x30\x48\x8B\xF1\x8B\xFA", "xxxxxxxxxxxxxxxxxxxx");
-    uintptr_t state_addr = ScanMemoryPattern("\x48\x8B\x05\x00\x00\x00\x00\x48\x8B\x88\x00\x00\x00\x00\x48\x85xC9", "xxx????xxx????xxx");
+    uintptr_t state_addr = ScanMemoryPattern("\x48\x8B\x05\x00\x00\x00\x00\x48\x8B\x88\x00\x00\x00\x00\x48\x85\xC9", "xxx????xxx????xxx");
 
     if (!load_addr || !pcall_addr || !state_addr) return false;
 
@@ -28,12 +33,21 @@ bool InitializeBridge() {
     int32_t offset = *(int32_t*)(state_addr + 3);
     global_L = *(rbx_LuaState*)(state_addr + 7 + offset);
 
-    return true;
+    return (global_L != nullptr);
 }
 
 // 執行來自具名管道的腳本
 void ExecuteInRobloxVM(const std::string& decryptedScript) {
-    if (!global_L && !InitializeBridge()) return;
+    // 關鍵修正：如果 InitializeBridge() 失敗（例如特徵碼過期），立刻中斷，防止呼叫空指標（Null Pointer）引發遊戲瞬間閃退
+    if (!InitializeBridge()) {
+        OutputDebugStringA("[CrownDrip] Failed to initialize Luau bridge. Base addresses not found.");
+        return;
+    }
+
+    // 再次確認指針安全
+    if (!global_L || !rbx_luau_load || !rbx_luau_pcall) {
+        return;
+    }
 
     // 呼叫動態獲取的 Luau 編譯器，將純文字的 Lua 腳本編譯為字節碼
     if (rbx_luau_load(global_L, "=CrownDripChunk", decryptedScript.c_str(), decryptedScript.size(), 0) == 0) {
