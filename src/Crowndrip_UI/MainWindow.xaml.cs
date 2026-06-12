@@ -1,9 +1,9 @@
- System;
+using System;
 using System.IO;
-using Microsoft.Win32;
+using System.IO.Pipes;
 using System.Windows;
 using System.Windows.Controls;
-using System.IO.Pipes;
+using Microsoft.Win32;
 
 namespace Crowndrip_UI
 {
@@ -12,7 +12,7 @@ namespace Crowndrip_UI
         public MainWindow() => InitializeComponent();
 
         // ────────────────────────────────────────────────────────
-        // 修正點 1：修復 File 選單下的點擊事件（請確保 XAML 中的 Click 綁定此名稱）
+        // 1. 修復 File 選單下的點擊事件（彈出選擇檔案視窗）
         // ────────────────────────────────────────────────────────
         private void FileOpenMenu_Click(object sender, RoutedEventArgs e)
         {
@@ -43,7 +43,7 @@ namespace Crowndrip_UI
         }
 
         // ────────────────────────────────────────────────────────
-        // 修正點 2：優化 Execute 按鈕事件，優雅處理「作業逾時」
+        // 2. 優化 Execute 按鈕事件，精準攔截並處理「作業逾時」
         // ────────────────────────────────────────────────────────
         private void ExecuteButton_Click(object sender, RoutedEventArgs e)
         {
@@ -68,7 +68,7 @@ namespace Crowndrip_UI
                 // 使用 Using 自動管理管道資源
                 using (var client = new NamedPipeClientStream(".", "CrownDripPipe", PipeDirection.Out))
                 {
-                    // 嘗試連接管道，如果 DLL 沒啟動，這裡就會引發超時
+                    // 嘗試連接管道，超時設定為 2 秒
                     client.Connect(2000); 
 
                     client.Write(buffer, 0, buffer.Length);
@@ -88,3 +88,4 @@ namespace Crowndrip_UI
             }
         }
     }
+}
